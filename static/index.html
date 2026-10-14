@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TicketBox — Movies</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="nav"></header>
+
+<main class="container">
+  <section class="hero">
+    <h1>Book movie tickets</h1>
+    <p>Pick a movie, choose your seats, done.</p>
+  </section>
+
+  <div class="section-head">
+    <h2>Movies now showing</h2>
+    <input id="filter" type="search" placeholder="Search title, genre or language">
+  </div>
+  <div id="movies" class="grid"><div class="empty">Loading movies…</div></div>
+
+  <h2>Upcoming shows</h2>
+  <div id="shows" class="list"><div class="empty">Loading shows…</div></div>
+</main>
+
+<script src="js/api.js"></script>
+<script>
+renderNav("movies");
+
+let movies = [];
+
+function renderMovies(list) {
+  const box = document.getElementById("movies");
+  if (!list.length) {
+    box.innerHTML = '<div class="empty">No movies found.</div>';
+    return;
+  }
+  box.innerHTML = list.map(function (m) {
+    return '<a class="card" href="movie.html?id=' + m.id + '">' +
+      "<h3>" + h(m.title) + "</h3>" +
+      '<div class="muted">' + h(m.genre || "Genre TBA") + " · " + h(m.language) + "</div>" +
+      '<div class="chips"><span class="chip">' + m.duration_minutes + " min</span></div>" +
+      "</a>";
+  }).join("");
+}
+
+async function loadMovies() {
+  const box = document.getElementById("movies");
+  try {
+    const data = await apiGet("/movies");
+    movies = data.movies || [];
+    renderMovies(movies);
+  } catch (err) {
+    box.innerHTML = '<div class="empty">' + h(err.message) + "</div>";
+  }
+}
+
+async function loadShows() {
+  const box = document.getElementById("shows");
+  try {
+    const data = await apiGet("/shows");
+    const now = new Date();
+    const upcoming = (data.shows || [])
+      .filter(function (s) { return new Date(s.start_time) > now; })
+      .slice(0, 8);
+
+    if (!upcoming.length) {
+      box.innerHTML = '<div class="empty">No upcoming shows right now.</div>';
+      return;
+    }
+
+    box.innerHTML = upcoming.map(function (s) {
+      return '<div class="row">' +
+        '<div class="info"><b>' + h(s.movie_title) + "</b>" +
+        '<span class="meta">' + fmtDateTime(s.start_time) +
+        " · " + h(s.theatre_name) + ", " + h(s.city) +
+        " · " + h(s.screen_name) + "</span></div>" +
+        '<div class="actions">' +
+        '<span class="chip">' + money(s.price) + "</span>" +
+        '<a class="btn btn-sm" href="seats.html?show_id=' + s.id + '">Book</a>' +
+        "</div></div>";
+    }).join("");
+  } catch (err) {
+    box.innerHTML = '<div class="empty">' + h(err.message) + "</div>";
+  }
+}
+
+document.getElementById("filter").addEventListener("input", function (e) {
+  const q = e.target.value.trim().toLowerCase();
+  renderMovies(movies.filter(function (m) {
+    return m.title.toLowerCase().includes(q) ||
+      (m.genre || "").toLowerCase().includes(q) ||
+      (m.language || "").toLowerCase().includes(q);
+  }));
+});
+
+loadMovies();
+loadShows();
+</script>
+</body>
+</html>

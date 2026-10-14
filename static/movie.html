@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Movie — TicketBox</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="nav"></header>
+
+<main class="container">
+  <div id="msg" class="alert"></div>
+
+  <section class="hero">
+    <h1 id="title">Loading…</h1>
+    <div class="chips" id="meta"></div>
+  </section>
+
+  <h2>Choose a show</h2>
+  <div id="shows" class="list"><div class="empty">Loading shows…</div></div>
+
+  <p class="muted"><a href="index.html">← Back to all movies</a></p>
+</main>
+
+<script src="js/api.js"></script>
+<script>
+renderNav("movies");
+
+const msg = document.getElementById("msg");
+const movieId = qs("id");
+
+function fail(message) {
+  document.getElementById("title").textContent = "Movie";
+  showAlert(msg, message, "error");
+  document.getElementById("shows").innerHTML = "";
+}
+
+async function load() {
+  if (!movieId) {
+    fail("No movie selected.");
+    return;
+  }
+
+  try {
+    const movie = await apiGet("/movies/" + movieId);
+    document.title = movie.title + " — TicketBox";
+    document.getElementById("title").textContent = movie.title;
+    document.getElementById("meta").innerHTML =
+      '<span class="chip">' + h(movie.genre || "Genre TBA") + "</span>" +
+      '<span class="chip">' + h(movie.language) + "</span>" +
+      '<span class="chip">' + movie.duration_minutes + " min</span>";
+  } catch (err) {
+    fail(err.message);
+    return;
+  }
+
+  try {
+    const data = await apiGet("/movies/" + movieId + "/shows");
+    const shows = data.shows || [];
+    const now = new Date();
+    const box = document.getElementById("shows");
+
+    if (!shows.length) {
+      box.innerHTML = '<div class="empty">No shows scheduled yet.</div>';
+      return;
+    }
+
+    box.innerHTML = shows.map(function (s) {
+      const started = new Date(s.start_time) <= now;
+      return '<div class="row">' +
+        '<div class="info"><b>' + fmtDateTime(s.start_time) + "</b>" +
+        '<span class="meta">' + h(s.theatre_name) + ", " + h(s.city) +
+        " · " + h(s.screen_name) + "</span></div>" +
+        '<div class="actions">' +
+        '<span class="chip">' + money(s.price) + " / seat</span>" +
+        (started
+          ? '<span class="badge past">Show started</span>'
+          : '<a class="btn btn-sm" href="seats.html?show_id=' + s.id + '">Book</a>') +
+        "</div></div>";
+    }).join("");
+  } catch (err) {
+    document.getElementById("shows").innerHTML = '<div class="empty">' + h(err.message) + "</div>";
+  }
+}
+
+load();
+</script>
+</body>
+</html>

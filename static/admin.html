@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — TicketBox</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="nav"></header>
+
+<main class="container">
+  <section class="hero">
+    <h1>Admin panel</h1>
+    <p>Manage movies, theatres, screens, shows and seat layouts.</p>
+  </section>
+
+  <div class="tabs">
+    <button class="tab active" data-pane="movies" type="button">Movies</button>
+    <button class="tab" data-pane="theatres" type="button">Theatres</button>
+    <button class="tab" data-pane="screens" type="button">Screens</button>
+    <button class="tab" data-pane="shows" type="button">Shows</button>
+    <button class="tab" data-pane="seats" type="button">Seats</button>
+  </div>
+
+  <div id="msg" class="alert"></div>
+
+  <!-- ===== Movies ===== -->
+  <section class="pane show" id="pane-movies">
+    <h3 id="m-heading">Add movie</h3>
+    <form id="m-form" class="inline-form">
+      <div><label for="m-title">Title</label><input id="m-title" required placeholder="Inception"></div>
+      <div><label for="m-duration">Duration (min)</label><input id="m-duration" type="number" min="1" required></div>
+      <div><label for="m-language">Language</label><input id="m-language" required placeholder="English"></div>
+      <div><label for="m-genre">Genre</label><input id="m-genre" placeholder="Sci-Fi"></div>
+      <div class="actions">
+        <button class="btn" id="m-submit" type="submit">Add movie</button>
+        <button class="btn btn-ghost" id="m-cancel" type="button" hidden>Cancel</button>
+      </div>
+    </form>
+
+    <div class="table-wrap" style="margin-top:18px">
+      <table>
+        <thead><tr><th>#</th><th>Title</th><th>Min</th><th>Language</th><th>Genre</th><th></th></tr></thead>
+        <tbody id="m-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===== Theatres ===== -->
+  <section class="pane" id="pane-theatres">
+    <h3>Add theatre</h3>
+    <form id="t-form" class="inline-form">
+      <div><label for="t-name">Name</label><input id="t-name" required placeholder="PVR Icon"></div>
+      <div><label for="t-city">City</label><input id="t-city" required placeholder="Hyderabad"></div>
+      <div class="actions"><button class="btn" type="submit">Add theatre</button></div>
+    </form>
+
+    <div class="table-wrap" style="margin-top:18px">
+      <table>
+        <thead><tr><th>#</th><th>Name</th><th>City</th></tr></thead>
+        <tbody id="t-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===== Screens ===== -->
+  <section class="pane" id="pane-screens">
+    <h3>Add screen</h3>
+    <form id="sc-form" class="inline-form">
+      <div><label for="sc-theatre">Theatre</label><select id="sc-theatre"></select></div>
+      <div><label for="sc-name">Screen name</label><input id="sc-name" required placeholder="Screen 1"></div>
+      <div class="actions"><button class="btn" type="submit">Add screen</button></div>
+    </form>
+
+    <div class="table-wrap" style="margin-top:18px">
+      <table>
+        <thead><tr><th>#</th><th>Screen</th><th>Theatre</th></tr></thead>
+        <tbody id="sc-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===== Shows ===== -->
+  <section class="pane" id="pane-shows">
+    <h3>Schedule show</h3>
+    <form id="sh-form" class="inline-form">
+      <div><label for="sh-movie">Movie</label><select id="sh-movie"></select></div>
+      <div><label for="sh-screen">Screen</label><select id="sh-screen"></select></div>
+      <div><label for="sh-time">Start time</label><input id="sh-time" type="datetime-local" required></div>
+      <div><label for="sh-price">Price / seat</label><input id="sh-price" type="number" min="0" step="0.01" required placeholder="250"></div>
+      <div class="actions"><button class="btn" type="submit">Schedule</button></div>
+    </form>
+
+    <div class="table-wrap" style="margin-top:18px">
+      <table>
+        <thead><tr><th>#</th><th>Movie</th><th>Theatre</th><th>Screen</th><th>Starts</th><th>Price</th></tr></thead>
+        <tbody id="sh-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===== Seats ===== -->
+  <section class="pane" id="pane-seats">
+    <h3>Create seat layout</h3>
+    <form id="seat-form" class="inline-form">
+      <div><label for="seat-screen">Screen</label><select id="seat-screen"></select></div>
+      <div><label for="seat-rows">Row names</label><input id="seat-rows" required placeholder="A,B,C,D"></div>
+      <div><label for="seat-count">Seats per row</label><input id="seat-count" type="number" min="1" required value="10"></div>
+      <div class="actions"><button class="btn" type="submit">Create seats</button></div>
+    </form>
+    <p class="muted">Creates seats such as A1, A2 … B1, B2 on the selected screen. Seats that already exist are skipped.</p>
+  </section>
+</main>
+
+<script src="js/api.js"></script>
+<script>
+renderNav("admin");
+
+if (requireLogin()) {
+  const msg = document.getElementById("msg");
+  let moviesCache = [];
+  let theatresCache = [];
+  let screensCache = [];
+  let editingMovieId = null;
+
+  const val = (id) => document.getElementById(id).value.trim();
+  const theatreName = (id) => {
+    const t = theatresCache.find((x) => x.id === id);
+    return t ? t.name + ", " + t.city : "Theatre #" + id;
+  };
+
+  function fillSelect(sel, items, labelFn) {
+    if (!items.length) {
+      sel.innerHTML = '<option value="">— none yet —</option>';
+      sel.disabled = true;
+      return;
+    }
+    sel.disabled = false;
+    sel.innerHTML = items.map((it) =>
+      '<option value="' + it.id + '">' + h(labelFn(it)) + "</option>"
+    ).join("");
+  }
+
+  /* ---------- Tabs ---------- */
+  document.querySelectorAll(".tab").forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
+      tab.classList.add("active");
+      document.querySelectorAll(".pane").forEach((p) => p.classList.remove("show"));
+      document.getElementById("pane-" + tab.dataset.pane).classList.add("show");
+      hideAlert(msg);
+    });
+  });
+
+  /* ---------- Movies ---------- */
+  function renderMovies() {
+    document.getElementById("m-rows").innerHTML =
+      moviesCache.map(function (m) {
+        return "<tr><td>" + m.id + "</td><td>" + h(m.title) + "</td><td>" + m.duration_minutes +
+          "</td><td>" + h(m.language) + "</td><td>" + h(m.genre || "—") + "</td>" +
+          '<td class="actions-cell">' +
+          '<button class="btn btn-ghost btn-sm" data-edit="' + m.id + '" type="button">Edit</button>' +
+          '<button class="btn btn-danger btn-sm" data-del="' + m.id + '" type="button">Delete</button>' +
+          "</td></tr>";
+      }).join("") || '<tr><td colspan="6" class="muted">No movies yet.</td></tr>';
+  }
+
+  async function loadMovies() {
+    try {
+      const data = await apiGet("/movies");
+      moviesCache = data.movies || [];
+      renderMovies();
+      fillSelect(document.getElementById("sh-movie"), moviesCache, (m) => m.title);
+    } catch (err) {
+      showAlert(msg, err.message, "error");
+    }
+  }
+
+  function resetMovieForm() {
+    editingMovieId = null;
+    document.getElementById("m-form").reset();
+    document.getElementById("m-heading").textContent = "Add movie";
+    document.getElementById("m-submit").textContent = "Add movie";
+    document.getElementById("m-cancel").hidden = true;
+  }
+
+  document.getElementById("m-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    hideAlert(msg);
+
+    const payload = {
+      title: val("m-title"),
+      duration_minutes: parseInt(val("m-duration"), 10),
+      language: val("m-language"),
+      genre: val("m-genre") || null
+    };
+
+    try {
+      if (editingMovieId) {
+        await apiPut("/movies/" + editingMovieId, payload);
+        showAlert(msg, "Movie updated.", "success");
+        resetMovieForm();
+      } else {
+        await apiPost("/movies", payload);
+        showAlert(msg, "Movie added.", "success");
+        document.getElementById("m-form").reset();
+      }
+      loadMovies();
+    } catch (err) {
+      showAlert(msg, err.message, "error");
+    }
+  });
+
+  document.getElementById("m-cancel").addEventListener("click", resetMovieForm);
+
+  document.getElementById("m-rows").addEventListener("click", async function (e) {
+    const editBtn = e.target.closest("[data-edit]");
+    const delBtn = e.target.closest("[data-del]");
+
+    if (editBtn) {
+      const m = moviesCache.find((x) => x.id === parseInt(editBtn.dataset.edit, 10));
+      if (!m) return;
+      editingMovieId = m.id;
+      document.getElementById("m-title").value = m.title;
+      document.getElementById("m-duration").value = m.duration_minutes;
+      document.getElementById("m-language").value = m.language;
+      document.getElementById("m-genre").value = m.genre || "";
+      document.getElementById("m-heading").textContent = "Edit movie";
+      document.getElementById("m-submit").textContent = "Save changes";
+      document.getElementById("m-cancel").hidden = false;
+      hideAlert(msg);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    if (delBtn) {
+      if (!window.confirm("Delete this movie?")) return;
+      try {
+        await apiDelete("/movies/" + delBtn.dataset.del);
+        showAlert(msg, "Movie deleted.", "success");
+        if (editingMovieId === parseInt(delBtn.dataset.del, 10)) resetMovieForm();
+        loadMovies();
+      } catch (err) {
+        showAlert(msg, err.message, "error");
+      }
+    }
+  });
+
+  /* ---------- Theatres ---------- */
+  function renderTheatres() {
+    document.getElementById("t-rows").innerHTML =
+      theatresCache.map(function (t) {
+        return "<tr><td>" + t.id + "</td><td>" + h(t.name) + "</td><td>" + h(t.city) + "</td></tr>";
+      }).join("") || '<tr><td colspan="3" class="muted">No theatres yet.</td></tr>';
+  }
+
+  async function loadTheatres() {
+    try {
+      const data = await apiGet("/theatres");
+      theatresCache = data.theatres || [];
+      renderTheatres();
+      fillSelect(document.getElementById("sc-theatre"), theatresCache, (t) => t.name + " (" + t.city + ")");
+    } catch (err) {
+      showAlert(msg, err.message, "error");
+    }
+  }
+
+  document.getElementById("t-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    hideAlert(msg);
+    try {
+      await apiPost("/theatres", { name: val("t-name"), city: val("t-city") });
+      showAlert(msg, "Theatre added.", "success");
+      document.getElementById("t-form").reset();
+      loadTheatres();
+    } catch (err) {
+      showAlert(msg, err.message, "error");
+    }
+  });
+
+  /* ---------- Screens ---------- */
+  function renderScreens() {
+    const filter = parseInt(document.getElementById("sc-theatre").value, 10);
+    const list = isNaN(filter) ? screensCache : screensCache.filter((s) => s.theatre_id === filter);
+
+    document.getElementById("sc-rows").innerHTML =
+      list.map(function (s) {
+        return "<tr><td>" + s.id + "</td><td>" + h(s.name) + "</td><td>" +
+          h(theatreName(s.theatre_id)) + "</td></tr>";
+      }).join("") || '<tr><td colspan="3" class="muted">No screens yet.</td></tr>';
+  }
+
+  async function loadScreens() {
+    try {
+      const data = await apiGet("/screens");
+      screensCache = data.screens || [];
+      fillSelect(document.getElementById("seat-screen"), screensCache,
+        (s) => s.name + " — " + theatreName(s.theatre_id));
+      renderScreens();
+    } catch (err) {
+      showAlert(msg, err.message, "error");
+    }
+  }
+
+  document.getElementById("sc-theatre").addEventListener("change", renderScreens);
+
+  document.getElementById("sc-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    hideAlert(msg);
+
+    const theatreId = parseInt(document.getElementById("sc-theatre").value, 10);
+    if (isNaN(theatreId)) {
+      showAlert(msg, "Add a theatre first.", "error");
+      return;
+    }
+
+    try {
+      await apiPost("/screens", { name: val("sc-name"), theatre_id: theatreId });
+      showAlert(msg, "Screen added.", "success");
+      document.getElementById("sc-name").value = "";
+      loadScreens();
+    } catch (err) {
+      showAlert(msg, err.message, "error");
+    }
+  });
+
+  /* ---------- Shows ---------- */
+  function renderShows(shows) {
+    document.getElementById("sh-rows").innerHTML =
+      shows.map(function (s) {
+        return "<tr><td>" + s.id + "</td><td>" + h(s.movie_title) + "</td><td>" +
+          h(s.theatre_name) + ", " + h(s.city) + "</td><td>" + h(s.screen_name) +
+          "</td><td>" + fmtDateTime(s.start_time) + "</td><td>" + money(s.price) + "</td></tr>";
+      }).join("") || '<tr><td colspan="6" class="muted">No shows scheduled yet.</td></tr>';
+  }
+
+  async function loadShows() {
+    try {
+      const data = await apiGet("/shows");
+      renderShows(data.shows || []);
+    } catch (err) {
+      showAlert(msg, err.message, "error");
+    }
+  }
+
+  document.getElementById("sh-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    hideAlert(msg);
+
+    let startTime = val("sh-time");
+    if (startTime && startTime.length === 16) startTime += ":00";
+
+    try {
+      await apiPost("/shows", {
+        movie_id: parseInt(document.getElementById("sh-movie").value, 10),
+        screen_id: parseInt(document.getElementById("sh-screen").value, 10),
+        start_time: startTime,
+        price: parseFloat(val("sh-price"))
+      });
+      showAlert(msg, "Show scheduled.", "success");
+      document.getElementById("sh-form").reset();
+      loadShows();
+    } catch (err) {
+      showAlert(msg, err.message, "error");
+    }
+  });
+
+  /* ---------- Seats ---------- */
+  document.getElementById("seat-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    hideAlert(msg);
+
+    const screenId = parseInt(document.getElementById("seat-screen").value, 10);
+    if (isNaN(screenId)) {
+      showAlert(msg, "Add a screen first.", "error");
+      return;
+    }
+
+    const rowNames = val("seat-rows").split(/[\s,]+/).filter(Boolean);
+    const count = parseInt(val("seat-count"), 10);
+
+    if (!rowNames.length || !count || count < 1) {
+      showAlert(msg, "Enter row names (e.g. A,B,C) and seats per row.", "error");
+      return;
+    }
+
+    const rows = {};
+    rowNames.forEach((name) => { rows[name.toUpperCase()] = count; });
+
+    try {
+      const data = await apiPost("/screens/" + screenId + "/seats", { rows: rows });
+      showAlert(msg, "Seats created: " + data.seats_created + ".", "success");
+    } catch (err) {
+      showAlert(msg, err.message, "error");
+    }
+  });
+
+  /* ---------- Init ---------- */
+  async function init() {
+    await loadTheatres();
+    await Promise.all([loadMovies(), loadScreens(), loadShows()]);
+    fillSelect(document.getElementById("sh-screen"), screensCache,
+      (s) => s.name + " — " + theatreName(s.theatre_id));
+  }
+
+  init();
+}
+</script>
+</body>
+</html>

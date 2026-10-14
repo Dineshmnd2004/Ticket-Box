@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign up — TicketBox</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="nav"></header>
+
+<main class="container">
+  <form class="form" id="register-form">
+    <h2>Create account</h2>
+    <p class="muted">It only takes a minute.</p>
+    <div id="msg" class="alert"></div>
+
+    <label for="name">Full name</label>
+    <input type="text" id="name" required placeholder="Jane Doe">
+
+    <label for="dob">Date of birth</label>
+    <input type="date" id="dob" required>
+
+    <label for="gender">Gender</label>
+    <select id="gender" required>
+      <option value="Female">Female</option>
+      <option value="Male">Male</option>
+      <option value="Other">Other</option>
+    </select>
+
+    <label for="email">Email</label>
+    <input type="email" id="email" required autocomplete="email" placeholder="you@example.com">
+
+    <label for="password">Password</label>
+    <input type="password" id="password" required minlength="4" autocomplete="new-password" placeholder="••••••••">
+
+    <button class="btn" type="submit">Sign up</button>
+    <div class="form-foot">Already have an account? <a href="login.html">Login</a></div>
+  </form>
+</main>
+
+<script src="js/api.js"></script>
+<script>
+renderNav();
+
+const msg = document.getElementById("msg");
+
+document.getElementById("register-form").addEventListener("submit", async function (e) {
+  e.preventDefault();
+  hideAlert(msg);
+
+  try {
+    await apiPost("/users", {
+      name: document.getElementById("name").value,
+      dob: document.getElementById("dob").value,
+      gender: document.getElementById("gender").value,
+      email: document.getElementById("email").value,
+      password: document.getElementById("password").value
+    });
+
+    window.location.replace("login.html?registered=1");
+  } catch (err) {
+    showAlert(msg, err.message, "error");
+  }
+});
+</script>
+</body>
+</html>

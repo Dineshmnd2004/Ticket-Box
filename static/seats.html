@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Select seats — TicketBox</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="nav"></header>
+
+<main class="container">
+  <div id="msg" class="alert"></div>
+
+  <section class="hero">
+    <h1 id="movie">Loading…</h1>
+    <p id="show-meta" class="muted"></p>
+  </section>
+
+  <div class="screen">S C R E E N</div>
+
+  <div id="seat-map" class="seat-map"><div class="empty">Loading seats…</div></div>
+
+  <div class="legend">
+    <span>Available</span>
+    <span class="l-selected">Selected</span>
+    <span class="l-booked">Booked</span>
+  </div>
+
+  <div class="summary">
+    <div>
+      <div class="muted" id="pick-text">No seats selected</div>
+      <div class="total" id="total">0.00</div>
+    </div>
+    <button class="btn" id="book-btn" disabled>Book tickets</button>
+  </div>
+
+  <p class="muted">Maximum 5 seats per booking. <a href="index.html">← Browse more movies</a></p>
+</main>
+
+<script src="js/api.js"></script>
+<script>
+renderNav("movies");
+
+const msg = document.getElementById("msg");
+const showId = qs("show_id");
+const selected = new Set();
+let show = null;
+const MAX_SEATS = 5;
+
+function showError(message) {
+  showAlert(msg, message, "error");
+  document.getElementById("seat-map").innerHTML = "";
+}
+
+function updateSummary() {
+  const count = selected.size;
+  document.getElementById("pick-text").textContent =
+    count ? count + " seat" + (count > 1 ? "s" : "") + ": " + Array.from(selected).join(", ")
+          : "No seats selected";
+
+  const total = show ? parseFloat(show.price) * count : 0;
+  document.getElementById("total").textContent = money(total.toFixed(2));
+
+  const started = show && new Date(show.start_time) <= new Date();
+  const btn = document.getElementById("book-btn");
+  btn.disabled = started || count === 0;
+  if (started) btn.textContent = "Booking closed";
+}
+
+function renderSeats(seats) {
+  const rows = {};
+  seats.forEach(function (s) {
+    if (!rows[s.row_name]) rows[s.row_name] = [];
+    rows[s.row_name].push(s);
+  });
+
+  const rowNames = Object.keys(rows).sort();
+  const map = document.getElementById("seat-map");
+
+  if (!rowNames.length) {
+    map.innerHTML = '<div class="empty">No seats configured for this screen yet.</div>';
+    return;
+  }
+
+  map.innerHTML = rowNames.map(function (name) {
+    const cells = rows[name].map(function (seat) {
+      const booked = seat.status === "booked";
+      return '<div class="seat' + (booked ? " booked" : "") +
+        (selected.has(seat.seat_number) ? " selected" : "") +
+        '" data-seat="' + h(seat.seat_number) + '"' +
+        (booked ? ' title="Already booked"' : "") + ">" +
+        h(seat.seat_number) + "</div>";
+    }).join("");
+
+    return '<div class="seat-row"><span class="row-label">' + h(name) + "</span>" +
+      cells + "</div>";
+  }).join("");
+}
+
+document.getElementById("seat-map").addEventListener("click", function (e) {
+  const seat = e.target.closest(".seat");
+  if (!seat || seat.classList.contains("booked")) return;
+
+  const number = seat.dataset.seat;
+
+  if (selected.has(number)) {
+    selected.delete(number);
+    seat.classList.remove("selected");
+  } else {
+    if (selected.size >= MAX_SEATS) {
+      showAlert(msg, "You can book a maximum of " + MAX_SEATS + " seats per show.", "error");
+      return;
+    }
+    selected.add(number);
+    seat.classList.add("selected");
+    hideAlert(msg);
+  }
+
+  updateSummary();
+});
+
+document.getElementById("book-btn").addEventListener("click", async function () {
+  hideAlert(msg);
+
+  if (!Auth.isLoggedIn()) {
+    const next = window.location.pathname + window.location.search;
+    window.location.replace("login.html?next=" + encodeURIComponent(next));
+    return;
+  }
+
+  try {
+    await apiPost("/bookings", {
+      show_id: parseInt(showId, 10),
+      seat_numbers: Array.from(selected)
+    });
+    window.location.href = "bookings.html";
+  } catch (err) {
+    showAlert(msg, err.message, "error");
+    if (err.status === 409) {
+      // Someone else took a seat — refresh the map.
+      selected.clear();
+      loadSeats();
+    }
+  }
+});
+
+async function loadSeats() {
+  try {
+    const data = await apiGet("/shows/" + showId + "/seats");
+    renderSeats(data.seats || []);
+    updateSummary();
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+async function load() {
+  if (!showId) {
+    showError("No show selected.");
+    return;
+  }
+
+  try {
+    const data = await apiGet("/shows");
+    show = (data.shows || []).find(function (s) { return String(s.id) === String(showId); });
+
+    if (!show) {
+      showError("Show not found.");
+      return;
+    }
+
+    document.title = show.movie_title + " — TicketBox";
+    document.getElementById("movie").textContent = show.movie_title;
+    document.getElementById("show-meta").textContent =
+      fmtDateTime(show.start_time) + " · " + show.theatre_name + ", " + show.city +
+      " · " + show.screen_name + " · " + money(show.price) + " / seat";
+    updateSummary();
+  } catch (err) {
+    showError(err.message);
+    return;
+  }
+
+  loadSeats();
+}
+
+load();
+</script>
+</body>
+</html>

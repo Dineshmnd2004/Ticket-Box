@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My bookings — TicketBox</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="nav"></header>
+
+<main class="container">
+  <div id="msg" class="alert"></div>
+
+  <section class="hero">
+    <h1>My bookings</h1>
+    <p>Your upcoming and past tickets.</p>
+  </section>
+
+  <div id="bookings" class="list"><div class="empty">Loading bookings…</div></div>
+</main>
+
+<script src="js/api.js"></script>
+<script>
+renderNav("bookings");
+
+if (requireLogin()) {
+  const msg = document.getElementById("msg");
+
+  async function load() {
+    const box = document.getElementById("bookings");
+
+    try {
+      const data = await apiGet("/bookings/my");
+      const bookings = data.bookings || [];
+
+      if (!bookings.length) {
+        box.innerHTML =
+          '<div class="empty">No bookings yet. <a href="index.html">Browse movies →</a></div>';
+        return;
+      }
+
+      box.innerHTML = bookings.map(function (b) {
+        const seats = b.seats.map(function (s) {
+          return '<span class="seat-chip">' + h(s.seat_number) +
+            '<button data-cancel="' + s.booking_id + '" title="Cancel this seat">×</button></span>';
+        }).join("");
+
+        return '<div class="card">' +
+          '<div class="row" style="border:0;padding:0;background:none">' +
+            '<div class="info"><b>' + h(b.movie_title) + "</b>" +
+            '<span class="meta">' + fmtDateTime(b.start_time) +
+            " · " + h(b.theatre_name) + ", " + h(b.city) +
+            " · " + h(b.screen_name) + "</span></div>" +
+            '<span class="badge ' + (b.is_upcoming ? "up" : "past") + '">' +
+            (b.is_upcoming ? "Upcoming" : "Completed") + "</span>" +
+          "</div>" +
+          '<div class="chips">' + seats + "</div>" +
+          '<div class="chips" style="margin-top:12px">' +
+            '<span class="chip">' + b.seats.length + " seat(s)</span>" +
+            '<span class="chip">' + money(b.price_per_seat) + " each</span>" +
+            '<span class="chip">Total ' + money(b.total_price) + "</span>" +
+          "</div>" +
+          "</div>";
+      }).join("");
+    } catch (err) {
+      box.innerHTML = '<div class="empty">' + h(err.message) + "</div>";
+    }
+  }
+
+  document.getElementById("bookings").addEventListener("click", async function (e) {
+    const btn = e.target.closest("[data-cancel]");
+    if (!btn) return;
+
+    const bookingId = btn.dataset.cancel;
+    if (!window.confirm("Cancel this seat booking?")) return;
+
+    try {
+      await apiDelete("/bookings/" + bookingId);
+      showAlert(msg, "Booking cancelled.", "success");
+      load();
+    } catch (err) {
+      showAlert(msg, err.message, "error");
+    }
+  });
+
+  load();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Login — TicketBox</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="nav"></header>
+
+<main class="container">
+  <form class="form" id="login-form">
+    <h2>Login</h2>
+    <p class="muted">Welcome back. Book your next show.</p>
+    <div id="msg" class="alert"></div>
+
+    <label for="email">Email</label>
+    <input type="email" id="email" required autocomplete="email" placeholder="you@example.com">
+
+    <label for="password">Password</label>
+    <input type="password" id="password" required autocomplete="current-password" placeholder="••••••••">
+
+    <button class="btn" type="submit">Login</button>
+    <div class="form-foot">New here? <a href="register.html">Create an account</a></div>
+  </form>
+</main>
+
+<script src="js/api.js"></script>
+<script>
+renderNav();
+
+const msg = document.getElementById("msg");
+
+if (qs("registered")) {
+  showAlert(msg, "Account created. Please log in.", "success");
+}
+
+document.getElementById("login-form").addEventListener("submit", async function (e) {
+  e.preventDefault();
+  hideAlert(msg);
+
+  try {
+    const data = await apiPost("/login", {
+      email: document.getElementById("email").value,
+      password: document.getElementById("password").value
+    });
+
+    Auth.set(data.token, data.name);
+
+    const next = qs("next");
+    window.location.replace(next && next.startsWith("/") ? next : "index.html");
+  } catch (err) {
+    showAlert(msg, err.message, "error");
+  }
+});
+</script>
+</body>
+</html>
